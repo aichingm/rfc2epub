@@ -1,0 +1,678 @@
+#!/bin/env php
+<?php
+
+function usageExit($exitCode) {
+    echo <<<EOU
+rfc2epub - create an epub ebook from an ietf rfc.
+
+Usage: rfc2epub [-flags [parameter]] <number of the rfc> <output book name>
+    
+    Checkout the EXAMPLES (with: rfc2epub -e)
+    
+Flags
+    
+    -e    show usage examples
+    -h    print this message
+    -f    replace the vendors font with M+ M1 (a very narrow monospaced font
+              by the M+ FONTS PROJECT)
+    -d    do not package the book to epub but create the file 
+              and directory structure with all its contents
+    -t    create a table of contents
+    
+    
+    -F    M+ M1 comes in thin, light, regular and medium (see example 2)
+    -L    set the letter-spacing (use positive or negative values - example 3)
+    -S    set the text which splits the text and the page number in the 
+          table of contents
+
+    
+Special Thanks to M+ FONTS PROJECT for publishing their fonts under a 
+    Free License ♥
+
+EOU;
+    exit($exitCode);
+}
+
+function examples() {
+    echo <<<EOU
+rfc2epub - create an epub ebook from an ietf rfc.
+
+Examples:
+    
+    1. rfc2epub 2549 2549.epub 
+       Creates an ebook of the rfc 2549 and names it 2549.epub 
+    
+    2. rfc2epub -fF light 2549 2549.epub 
+       The <f> flag replaces the vendors font with the M+ 1M font.
+       The patameter for <F> will be set to light.
+    
+    2. rfc2epub -fFL regular -1 2549 2549.epub 
+       The <f> flag replaces the vendors font with the M+ 1M font.
+       The patameter for <F> will be set to regular.
+       The parameter for <L> will be set to -1 to narrow the letters. This is
+           useful if 80 characters per line do not fit on your epub readers
+           screen.
+
+
+EOU;
+    exit(0);
+}
+
+/* Defining */
+{
+    define("VERSION", -1);
+    define("URL", "https://tools.ietf.org/html/rfc");
+    define("URL_EXT", ".html");
+    define("USER_AGENT", "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.13) Gecko/20080311 Firefox/2.0.0.13");
+    define("INTERNAL_FONT_MIME", ["ttf" => "font/ttf", "woff" => "font/eot", "svg" => "font/otf", "eot" => "font/woff"]);
+}
+
+
+
+/* Configuration */
+{
+    $OUTPUT_TYPE = "ZIP"; //DIR, ZIP
+    $OUTPUT_NAME = "IETF-RFC.epub";
+    $CREATE_TOC = false;
+    $CREATE_COVER = false;
+    $USE_INTERNAL_FONT = true;
+    $INTERNAL_FONT = "mp-1m";
+    $INTERNAL_FONT_WIDTH = "regular"; //thin, light, regular, medium
+    $INTERNAL_FONT_FORMATS = ["ttf", "woff", "svg", "eot"];
+    $LETTER_SPACING = 0;
+    $TOC_SPLITER = "....";
+
+}
+
+
+
+
+/* Commandline Parsing */
+{
+    $flagsv = [];
+    array_shift($argv);
+    while (1) {
+        $s = reset($argv);
+        if ($s{0} == "-" && (!isset($s{1}) || (isset($s{1}) && $s{1} != "-"))) {
+            $flagsv[] = array_shift($argv);
+        } else {
+            break;
+        }
+    }
+    unset($s);
+
+    $FLAGS = str_split(str_replace("-", "", implode("", $flagsv)));
+
+    $PARAM_VALUES = [];
+    foreach ($FLAGS as $f) {
+        if (ctype_alpha($f) && strtoupper($f) == $f) {
+            $PARAM_VALUES[$f] = array_shift($argv);
+        }
+    }
+    unset($flagsv);
+
+    if (in_array("h", $FLAGS)) {
+        usageExit(0);
+    }
+    if (in_array("e", $FLAGS)) {
+        examples(0);
+    }
+
+    if (in_array("f", $FLAGS)) {
+        $USE_INTERNAL_FONT = true;
+    }
+    if (in_array("d", $FLAGS)) {
+        $OUTPUT_TYPE = "DIR";
+    }
+    if (in_array("t", $FLAGS)) {
+        $CREATE_TOC = true;
+    }
+    if (in_array("c", $FLAGS)) {
+        $CREATE_COVER = true;
+    }
+
+    if (in_array("F", $FLAGS)) {
+        $INTERNAL_FONT_WIDTH = $PARAM_VALUES["F"];
+        if (!in_array($INTERNAL_FONT_WIDTH, ["thin", "light", "regular", "medium"])) {
+            usageExit(0);
+        }
+    }
+    if (in_array("L", $FLAGS)) {
+        $LETTER_SPACING = intval($PARAM_VALUES["L"], 10);
+    }
+    if(in_array("S", $FLAGS)){
+        $TOC_SPLITER = $PARAM_VALUES["S"];
+    }
+
+    if(count($argv) != 2){
+        usageExit(0);
+    }
+    $RFC_ID = $argv[0];
+    $RFC_NAME = "rfc" . $RFC_ID;
+    $OUTPUT_NAME = $argv[1];
+
+}
+
+
+
+/* Output Functions */
+{
+    if ($OUTPUT_TYPE == "DIR") {
+        $MK_DIR = function($name) {
+            global $OUTPUT_NAME;
+            mkdir($OUTPUT_NAME . "/" . $name, 0777, true);
+        };
+        $MK_FILE = function($name, $content){
+            global $OUTPUT_NAME;
+            file_put_contents($OUTPUT_NAME . "/" . $name, $content);
+        };
+    } else if ($OUTPUT_TYPE == "ZIP") {
+        $EPUB_ARCHIVE = new ZipArchive();
+        $EPUB_ARCHIVE->open($OUTPUT_NAME, ZipArchive::CREATE);
+        $MK_DIR = function($name){
+            global $EPUB_ARCHIVE;
+            $EPUB_ARCHIVE->addEmptyDir($name);
+        };
+        $MK_FILE = function($name, $content){
+            global $EPUB_ARCHIVE;
+            $EPUB_ARCHIVE->addFromString($name, $content);
+        };
+    }
+
+}
+
+/* Data Fetching */
+{
+    $url = URL . $RFC_ID . URL_EXT;
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_USERAGENT, USER_AGENT);
+    $RFC_RAW = curl_exec($ch);
+    curl_close($ch);
+    //$RFC_RAW = file_get_contents("/home/mario/Downloads/webs/RFC 6265 - HTTP State Management Mechanism.html");
+    unset($url);
+    unset($ch);
+}
+
+
+/* Disable Error Spitting */
+{
+    libxml_use_internal_errors(true);
+}
+
+
+
+
+/* Fix Rfc */
+{
+
+    //Load Dom
+    $RFC_DOM = new DOMDocument('1.0', 'UTF-8');
+    $RFC_DOM->loadHTML($RFC_RAW);
+
+    //Set Elements
+    $BODY = $RFC_DOM->getElementsByTagName("body")->item(0);
+    $HEAD = $RFC_DOM->getElementsByTagName("head")->item(0);
+    $BODY instanceof \DOMElement;
+    $HEAD instanceof \DOMElement;
+    $CONTENT = null;
+    for ($i = 0; $i < $BODY->childNodes->length; $i++) {
+        $child = $BODY->childNodes->item($i);
+        if ($child instanceof DOMElement && $child->tagName == "div") {
+            $CONTENT = $child;
+        }
+    }
+    $CONTENT instanceof \DOMElement;
+
+    //insert fonts
+    if ($USE_INTERNAL_FONT) {
+        $style = $RFC_DOM->createElement("style");
+        $style->setAttribute("type", "text/css");
+        $f = $INTERNAL_FONT . "-" . $INTERNAL_FONT_WIDTH;
+        $style->nodeValue = <<<EOS
+@font-face {
+    font-family: 'mp-1m';
+    font-weight: normal;
+    font-style: normal;
+    src: url('fonts/$f.eot');
+    src: url('fonts/$f.eot?#iefix') format('embedded-opentype'),
+    url('fonts/$f.woff') format('woff'),
+    url('fonts/$f.ttf') format('truetype'),
+    url('fonts/$f.svg#OpenSansBold') format('svg');
+}
+        
+body, pre, h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6, span, .pre {
+        font-family: 'mp-1m', monospace;
+}   
+EOS;
+
+        $HEAD->appendChild($style);
+        unset($f);
+        unset($style);
+    }
+
+    //set letter-spacing
+
+    $BODY->setAttribute("style", $BODY->getAttribute("style") . "letter-spacing: {$LETTER_SPACING}px;");
+
+
+    //remove javascript
+    $BODY->setAttribute("onload", "");
+    $scripts = $HEAD->getElementsByTagName("script");
+    $scriptsRemove = [];
+    for ($i = 0; $i < $scripts->length; $i++) {
+        $s = $scripts->item($i);
+        if ($s instanceof DOMElement) {
+            $scriptsRemove[] = $s;
+        }
+    }
+    foreach ($scriptsRemove as $value) {
+        $value->parentNode->removeChild($value);
+    }
+    unset($scripts);
+    unset($scriptsRemove);
+
+    //remove page lines / remove HR
+    for ($i = 0; $i < $CONTENT->childNodes->length; $i++) {
+        $hr = $CONTENT->childNodes->item($i);
+        if ($hr instanceof DOMElement && $hr->tagName == "hr") {
+            $CONTENT->removeChild($hr);
+        }
+    }
+
+    //remove page breaks
+    $spansgray = $CONTENT->getElementsByTagName("span");
+    $spansgrayRemove = [];
+    for ($i = 0; $i < $spansgray->length; $i++) {
+        $s = $spansgray->item($i);
+        if ($s instanceof DOMElement && $s->hasAttribute("class") && $s->getAttribute("class") == "grey") {
+            $spansgrayRemove[] = $s;
+        }
+    }
+    foreach ($spansgrayRemove as $value) {
+        $value->parentNode->removeChild($value);
+    }
+    unset($spansgray);
+    unset($spansgrayRemove);
+    unset($s);
+
+
+    //fix remaining page spacing
+    $page = 1;
+    $pres = $CONTENT->getElementsByTagName("pre");
+    for ($i = 0; $i < $pres->length; $i++) {
+        $pre = $pres->item($i);
+        if ($pre instanceof DOMElement && (($pre->hasAttribute("class") && $pre->getAttribute("class") == "newpage") || $i == 0)) {
+            //fix spacing at the beginning of the page
+            $a = $pre->childNodes->item(0);
+            if ($a instanceof DOMElement && $a->tagName == "a" && $a->hasAttribute("class") && $a->getAttribute("class") == "invisible") {
+                $a->textContent = "[Page " . $page++ . " End, " . $page . " Beginn]";
+                $a->setAttribute("class", "gray");
+                $a->setAttribute("style", "color: #999999;");
+                $textNode = $pre->childNodes->item(2);
+                $textNode->textContent = ltrim($textNode->textContent, "\n\r");
+            }
+            //fix spacing at the end of the page
+            $textNode = $pre->childNodes->item($pre->childNodes->length - 1);
+            $textNode->textContent = rtrim($textNode->textContent, "\n\r");
+        }
+    }
+
+
+    //remove last page numbering 
+    $lastNode = $pre->childNodes->item($pre->childNodes->length - 1);
+    if (preg_match("~\[Page [0-9]+\]$~", $lastNode->textContent) === 1) {
+        $lastNode->textContent = substr($lastNode->textContent, 0, strrpos($lastNode->textContent, "\n"));
+    }
+    unset($lastNode);
+    unset($page);
+    unset($pres);
+    unset($pre);
+    unset($a);
+    unset($textNode);
+    unset($i);
+
+    //fix ./rfcXXXXXX links
+    $as = $CONTENT->getElementsByTagName("a");
+    for ($i = 0; $i < $as->length; $i++) {
+        $a = $as->item($i);
+        if ($a instanceof DOMElement && $a->tagName == "a" && preg_match("~^\./rfc[0-9]+~", $a->getAttribute("href"))) {
+            $a->setAttribute("href", "https://tools.ietf.org/html/" . $a->getAttribute("href"));
+        }
+    }
+    unset($as);
+    unset($a);
+    unset($i);
+
+}
+
+
+
+/* Search Headings */
+{
+    $headingsElements = $CONTENT->getElementsByTagName("a");
+    $HEADINGS = [];
+    for ($i = 0; $i < $headingsElements->length; $i++) {
+        $a = $headingsElements->item($i);
+        if ($a instanceof DOMElement && !$a->hasAttribute("class") && $a->hasAttribute("href")
+                //&& preg_match("~^[0-9]+(\.[0-9]+)*$~", $a->textContent) 
+                //&& preg_match("~^#section-[0-9]+(\.[0-9]+)*$$~", $a->getAttribute("href")) 
+                && preg_match("~^#.*$~", $a->getAttribute("href"))
+                //&& $a->nextSibling->textContent{0} == "."
+                && strlen($a->nextSibling->textContent) <= 80 && strpos($a->nextSibling->textContent, $TOC_SPLITER) !== FALSE
+        ) {
+            $HEADINGS[] = [$a->getAttribute("href"), trim($a->nextSibling->textContent, ". "), $a->textContent];
+        }
+    }
+}
+
+
+
+
+
+/* Extract Data */
+{
+    //$TITLE = $CONTENT->getElementsByTagName("pre")->item(0)->getElementsByTagName("span")->item(0)->textContent;
+    $TITLE = $HEAD->getElementsByTagName("title")->item(0)->textContent;
+
+    $firstpage = $CONTENT->getElementsByTagName("pre")->item(0);
+    $dataBlock = "";
+    for ($i = 0; $i < $firstpage->childNodes->length; $i++) {
+        $child = $firstpage->childNodes->item($i);
+        if ($child instanceof DOMElement && $child->tagName == "span" && $child->hasAttribute("class") && $child->getAttribute("class") == "h1") {
+            break;
+        }
+        $dataBlock .= $child->textContent;
+    }
+
+
+    $DATA_LEFT = $DATA_RIGHT = [];
+
+    foreach (explode("\n", $dataBlock) as $line) {
+        $pos = strrpos($line, "   ");
+        $pos = $pos === FALSE ? strlen($line) : $pos;
+        list($l, $r) = [trim(substr($line, 0, $pos)), trim(substr($line, $pos))];
+        if (!empty($l)) {
+            $DATA_LEFT[] = $l;
+        }
+        if (!empty($r)) {
+            $DATA_RIGHT[] = $r;
+        }
+    }
+    unset($child);
+    unset($line);
+    unset($i);
+    unset($l);
+    unset($r);
+    unset($firstpage);
+    unset($dataBlock);
+    unset($pos);
+
+
+
+
+
+
+    $AUTHOR = $DATA_RIGHT[0];
+    $dateParsed = date_parse(end($DATA_RIGHT));
+    $DATE = $dateParsed["year"] . "-" . $dateParsed["month"] . "-" . $dateParsed["day"];
+
+
+    unset($dateParsed);
+    unset($counter);
+
+}
+
+
+/* Create Folder */
+{
+    //create   META-INF/
+    $MK_DIR("META-INF");
+
+
+    //insert font;
+    $MK_DIR("fonts");
+
+}
+
+/* Create Files */
+{
+    //create mimetype
+    $MK_FILE("mimetype", "application/epub+zip");
+
+    //create fonts
+    if ($USE_INTERNAL_FONT) {
+        $f = "fonts/" . basename($INTERNAL_FONT . "-" . $INTERNAL_FONT_WIDTH);
+        foreach ($INTERNAL_FONT_FORMATS as $format) {
+            $c = file_get_contents(__DIR__."/fonts/" . $INTERNAL_FONT . "-" . $INTERNAL_FONT_WIDTH . "." . $format);
+            $MK_FILE($f . "." . $format, $c);
+        }
+        unset($f);
+        unset($c);
+    }
+
+    //create META-INF/container.xml
+    $MK_FILE("META-INF/container.xml", <<<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<container
+  xmlns="urn:oasis:names:tc:opendocument:xmlns:container"
+  version="1.0">
+  <rootfiles>
+    <rootfile
+      full-path="$RFC_NAME.opf"
+      media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>
+EOF
+    );
+
+
+    //create cover.xhtml
+
+    if ($CREATE_COVER) {
+
+        $MK_FILE("cover.xhtml", <<<EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:ops="http://www.idpf.org/2007/ops"
+      xml:lang="en">
+  <head>
+    <title>Cover</title>
+    <style type="text/css">
+        body, pre, h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6, span, .pre {
+                font-family: sans-serif;
+        }
+    </style>
+  </head>
+  <body>
+    <br />
+    <br />
+    <br />
+    <br />
+    <h1 style="text-align: center;">$TITLE</h1>
+ </body>
+</html>
+EOF
+        );
+    }
+    
+    
+    //create nav.xhtml
+
+    if ($CREATE_TOC) {
+
+        $toc = implode("", array_map(function(&$value)use($RFC_NAME){
+                    return "<li><a href=\"$RFC_NAME.xhtml" . $value[0] . "\">" . $value[2] . " - " . $value[1] . "</a></li>\n";
+        }, $HEADINGS));
+        
+        $MK_FILE("nav.xhtml", <<<EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:ops="http://www.idpf.org/2007/ops"
+      xml:lang="en">
+  <head>
+    <title>Table Of Contents</title>
+    <style type="text/css">
+        body, pre, h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6, span, .pre {
+                font-family: sans-serif;
+        }
+    </style>
+  </head>
+  <body>
+   <nav ops:type="toc">
+    <h1>Table Of Contents</h1>
+    <ul>
+      <li><a href="nav.xhtml">Table Of Contents</a></li>
+        $toc
+    </ul>
+  </nav>
+ </body>
+</html>
+EOF
+        );
+        unset($toc);
+    }
+
+
+    //create $RFC_NAME.ncx
+    $counter = new stdClass();
+    $counter->i = 0;
+    $nav = implode("", array_map(function(&$value)use($counter, $RFC_NAME){
+                $x = "<navPoint playOrder=\"$counter->i\" id=\"id_{$counter->i}\"><navLabel><text>{$value[2]} - {$value[1]}</text></navLabel><content src=\"$RFC_NAME.xhtml{$value[0]}\"/></navPoint>\n";
+                $counter->i++;
+                return $x;
+    }, $HEADINGS));
+
+    $MK_FILE("$RFC_NAME.ncx", <<<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+  <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"
+    version="2005-1"
+    xml:lang="en">
+    <head>
+      <meta name="dtb:uid" content="$RFC_ID"/>
+    </head>
+    <docTitle>
+      <text>$TITLE</text>
+    </docTitle>
+    <docAuthor>
+      <text>$AUTHOR</text>
+    </docAuthor>
+    <navMap>
+      <navPoint playOrder="1" id="id_01">
+        <navLabel>
+          <text>$TITLE</text>
+        </navLabel>
+        <content src="$RFC_NAME.xhtml"/>
+      </navPoint>
+        $nav
+    </navMap>
+  </ncx>
+EOF
+    );
+    unset($nav);
+
+
+    //create $RFC_NAME.opf
+    $counter = new stdClass();
+    $counter->i = 0;
+    if ($USE_INTERNAL_FONT) {
+        $f = "fonts/" . $INTERNAL_FONT . "-" . $INTERNAL_FONT_WIDTH;
+        $fonts = implode("", array_map(function($ext)use($f, $counter){
+                    $mime = INTERNAL_FONT_MIME[$ext];
+                    $x = "<item id=\"font$counter->i\"  href=\"$f.$ext\"  media-type=\"$mime\"/>\n";
+                    $counter->i++;
+                    return $x;
+        }, $INTERNAL_FONT_FORMATS));
+    } else {
+        $fonts = "";
+    }
+    
+    if ($CREATE_TOC) {
+        $tocItem = '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>';
+        $tocRef = '<itemref idref="nav"/>';
+    } else {
+        $tocItem = "";
+        $tocRef = "";
+    }
+    if ($CREATE_COVER) {
+        $coverItem = '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml" properties="cover"/>';
+        $coverRef = '<itemref idref="cover"/>';
+    } else {
+        $coverItem = "";
+        $coverRef = "";
+    }
+
+    $MK_FILE("$RFC_NAME.opf", <<<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+  <package version="2.0"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:opf="http://www.idpf.org/2007/opf"
+    xmlns="http://www.idpf.org/2007/opf"
+    unique-identifier="rfcId">
+    <metadata>
+      <dc:identifier id="rfcId" opf:scheme="UUID">$RFC_ID</dc:identifier>
+      <dc:language>en</dc:language>
+      <dc:title xml:lang="de">$TITLE</dc:title>
+      <dc:description xml:lang="en">$TITLE</dc:description>
+      <dc:creator
+        opf:file-as="$AUTHOR"
+        opf:role="aut"
+        xml:lang="en">$AUTHOR</dc:creator>
+      <dc:date opf:event="creation">$DATE</dc:date>
+      <dc:date opf:event="publication">$DATE</dc:date>
+    </metadata>
+    <manifest>
+      <item id="ncx" href="$RFC_NAME.ncx" media-type="application/x-dtbncx+xml"/>
+      $coverItem
+      $tocItem
+      <item id="$RFC_NAME" href="$RFC_NAME.xhtml" media-type="application/xhtml+xml"/>
+      $fonts
+    </manifest>
+    <spine toc="ncx">
+      $coverRef
+      $tocRef
+      <itemref idref="$RFC_NAME"/>
+    </spine>
+  </package>
+EOF
+    );
+    unset($f);
+    unset($counter);
+    unset($fonts);
+    unset($tocItem);
+    unset($tocRef);
+
+
+//create $RFC_NAME.xhtml
+    $output = "";
+    if (in_array("tidy", get_loaded_extensions())) {
+        $config = array(
+            'indent' => true,
+            'output-xhtml' => true,
+            'wrap' => 200);
+
+        // Tidy
+        $tidy = new tidy();
+        $tidy->parseString($RFC_DOM->saveXML(), $config, 'utf8');
+        $tidy->cleanRepair();
+        $output .= $tidy;
+    } else {
+        $output = $RFC_DOM->saveXML();
+        echo "Tidy not found, output maybe not valid xhtml. Please install php-tidy and tidy." . PHP_EOL;
+    }
+
+    $MK_FILE($RFC_NAME . ".xhtml", $output);
+    unset($output);
+    unset($tidy);
+    unset($config);
+}
+
+
+
+/* Finalizing */
+{
+    if ($OUTPUT_TYPE == "ZIP") {
+        $EPUB_ARCHIVE->close();
+    }
+}

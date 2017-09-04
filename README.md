@@ -10,17 +10,17 @@ rfc2epub - create an epub ebook from an IETF RFC
 
 ## Flags  
 
--e    show usage examples
--h    print this message
--f    replace the vendors font with M+ M1 (a very narrow monospaced font by the M+ FONTS PROJECT)
--d    do not package the book to epub but create the file and directory structure with all its contents
--t    create a table of contents
+-e    show usage examples  
+-h    print this message  
+-f    replace the vendors font with M+ M1 (a very narrow monospaced font by the M+ FONTS PROJECT) 
+-d    do not package the book to epub but create the file and directory structure with all its contents  
+-t    create a table of contents  
 
 
--F    M+ M1 comes in thin, light, regular and medium (see example 2)
--L    set the letter-spacing (use positive or negative values - example 3)
--S    set the text which splits the text and the page number in the
-      table of contents
+-F    M+ M1 comes in thin, light, regular and medium (see example 2)  
+-L    set the letter-spacing (use positive or negative values - example 3)  
+-S    set the text which splits the text and the page number in the  
+      table of contents  
 
 
 
@@ -30,16 +30,14 @@ rfc2epub - create an epub ebook from an IETF RFC
   Creates an ebook of the rfc 2549 and names it 2549.epub 
 
 2. `rfc2epub -fF light 2549 2549.epub`
-  The <f> flag replaces the vendors font with the M+ 1M font.
-  The patameter for <F> will be set to light.
+  The `f` flag replaces the vendors font with the M+ 1M font.
+  The patameter for `F` will be set to light.
 
 3. `rfc2epub -fFL regular -1 2549 2549.epub`
-  The <f> flag replaces the vendors font with the M+ 1M font.
-  The patameter for <F> will be set to regular.
-  The parameter for <L> will be set to -1 to narrow the letters. This is
-  useful if 80 characters per line do not fit on your epub readers
-
-  screen.
+  The `f` flag replaces the vendors font with the M+ 1M font.
+  The patameter for `F` will be set to regular.
+  The parameter for `L` will be set to -1 to narrow the letters. This is
+  useful if 80 characters per line do not fit on your epub readers screen.
 
 
 

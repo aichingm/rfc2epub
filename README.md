@@ -12,7 +12,7 @@ rfc2epub - create an epub ebook from an IETF RFC
 
 -e    show usage examples  
 -h    print this message  
--f    replace the vendors font with M+ M1 (a very narrow monospaced font by the M+ FONTS PROJECT) 
+-f    replace the vendors font with M+ M1 (a very narrow monospaced font by the M+ FONTS PROJECT)  
 -d    do not package the book to epub but create the file and directory structure with all its contents  
 -t    create a table of contents  
 

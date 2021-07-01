@@ -6,27 +6,27 @@ function usageExit($exitCode) {
 rfc2epub - create an epub ebook from an ietf rfc.
 
 Usage: rfc2epub [-flags [parameter]] <number of the rfc> <output book name>
-    
+
     Checkout the EXAMPLES (with: rfc2epub -e)
-    
+
 Flags
-    
+
     -e    show usage examples
     -h    print this message
     -f    replace the vendors font with M+ M1 (a very narrow monospaced font
               by the M+ FONTS PROJECT)
-    -d    do not package the book to epub but create the file 
+    -d    do not package the book to epub but create the file
               and directory structure with all its contents
     -t    create a table of contents
-    
-    
+
+
     -F    M+ M1 comes in thin, light, regular and medium (see example 2)
     -L    set the letter-spacing (use positive or negative values - example 3)
-    -S    set the text which splits the text and the page number in the 
+    -S    set the text which splits the text and the page number in the
           table of contents
 
-    
-Special Thanks to M+ FONTS PROJECT for publishing their fonts under a 
+
+Special Thanks to M+ FONTS PROJECT for publishing their fonts under a
     Free License ♥
 
 EOU;
@@ -38,15 +38,15 @@ function examples() {
 rfc2epub - create an epub ebook from an ietf rfc.
 
 Examples:
-    
-    1. rfc2epub 2549 2549.epub 
-       Creates an ebook of the rfc 2549 and names it 2549.epub 
-    
-    2. rfc2epub -fF light 2549 2549.epub 
+
+    1. rfc2epub 2549 2549.epub
+       Creates an ebook of the rfc 2549 and names it 2549.epub
+
+    2. rfc2epub -fF light 2549 2549.epub
        The <f> flag replaces the vendors font with the M+ 1M font.
        The patameter for <F> will be set to light.
-    
-    2. rfc2epub -fFL regular -1 2549 2549.epub 
+
+    2. rfc2epub -fFL regular -1 2549 2549.epub
        The <f> flag replaces the vendors font with the M+ 1M font.
        The patameter for <F> will be set to regular.
        The parameter for <L> will be set to -1 to narrow the letters. This is
@@ -61,7 +61,7 @@ EOU;
 /* Defining */
 {
     define("VERSION", -1);
-    define("URL", "https://tools.ietf.org/html/rfc");
+    define("URL", "https://datatracker.ietf.org/doc/html/rfc");
     define("URL_EXT", ".html");
     define("USER_AGENT", "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.13) Gecko/20080311 Firefox/2.0.0.13");
     define("INTERNAL_FONT_MIME", ["ttf" => "font/ttf", "woff" => "font/eot", "svg" => "font/otf", "eot" => "font/woff"]);
@@ -188,6 +188,7 @@ EOU;
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_USERAGENT, USER_AGENT);
+
     $RFC_RAW = curl_exec($ch);
     curl_close($ch);
     //$RFC_RAW = file_get_contents("/home/mario/Downloads/webs/RFC 6265 - HTTP State Management Mechanism.html");
@@ -225,6 +226,98 @@ EOU;
     }
     $CONTENT instanceof \DOMElement;
 
+{
+    //fix default styles
+
+    //remove the first style tag
+    $styles = $HEAD->getElementsByTagName("style");
+    $stylesRemove = [];
+    for ($i = 0; $i < $styles->length && $i < 1; $i++) { // remove only the first
+        $s = $styles->item($i);
+        if ($s instanceof DOMElement) {
+            $stylesRemove[] = $s;
+        }
+    }
+    foreach ($stylesRemove as $value) {
+        $value->parentNode->removeChild($value);
+    }
+    unset($styles);
+    unset($stylesRemove);
+
+    $style = $RFC_DOM->createElement("style");
+    $style->setAttribute("type", "text/css");
+    $style->nodeValue = <<<EOS
+<![CDATA[
+
+    body { font-size: 10pt; margin: 0 4em; }
+    h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+        font-weight: bold;
+        display: inline;
+        white-space: pre;
+        font-family: monospace;
+        font-size: 1em;
+        font-weight: bold;
+    }
+    pre {
+        font-size: 1em;
+        /*margin-top: 0px;
+        margin-bottom: 0px; maybe add an option for that*/
+    }
+    .pre {
+        white-space: pre;
+        font-family: monospace;
+    }
+    .header {
+        font-weight: bold;
+    }
+    .newpage {
+        /*page-break-before: always; maybe add an option for that*/
+    }
+    .invisible {
+        text-decoration: none;
+        color: white;
+    }
+    .grey, .grey a:link, .grey a:visited {
+        color: #777;
+    }
+    .meta-info {
+        background-color: #EEE;
+    }
+    .top {
+        border-top: 7px solid #EEE;
+    }
+    .pad {
+        padding-top: 7px;
+        line-height: 24px;
+        padding-bottom: 4px;
+    }
+
+    .legend   { font-size: 90%; }
+    .cplate   { font-size: 70%; border: solid grey 1px; }
+
+
+    .bgwhite  { background-color: white; }
+    .bgred    { background-color: #F44; }
+    .bggrey   { background-color: #666; }
+    .bgbrown  { background-color: #840; }
+    .bgorange { background-color: #FA0; }
+    .bgyellow { background-color: #EE0; }
+    .bgmagenta{ background-color: #F4F; }
+    .bgblue   { background-color: #66F; }
+    .bgcyan   { background-color: #4DD; }
+    .bggreen  { background-color: #4F4; }
+
+    .draftcontent { margin-top:0px !important;}
+
+
+    ]]>
+EOS;
+
+        $HEAD->appendChild($style);
+        unset($style);
+
+
+}
     //insert fonts
     if ($USE_INTERNAL_FONT) {
         $style = $RFC_DOM->createElement("style");
@@ -241,10 +334,13 @@ EOU;
     url('fonts/$f.ttf') format('truetype'),
     url('fonts/$f.svg#OpenSansBold') format('svg');
 }
-        
+
 body, pre, h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6, span, .pre {
         font-family: 'mp-1m', monospace;
-}   
+}
+.noprint{
+    display: none;
+}
 EOS;
 
         $HEAD->appendChild($style);
@@ -304,15 +400,16 @@ EOS;
     for ($i = 0; $i < $pres->length; $i++) {
         $pre = $pres->item($i);
         if ($pre instanceof DOMElement && (($pre->hasAttribute("class") && $pre->getAttribute("class") == "newpage") || $i == 0)) {
-            //fix spacing at the beginning of the page
-            $a = $pre->childNodes->item(0);
-            if ($a instanceof DOMElement && $a->tagName == "a" && $a->hasAttribute("class") && $a->getAttribute("class") == "invisible") {
-                $a->textContent = "[Page " . $page++ . " End, " . $page . " Beginn]";
-                $a->setAttribute("class", "gray");
-                $a->setAttribute("style", "color: #999999;");
+
+            $span = $pre->childNodes->item(0);
+            if ($span instanceof DOMElement && $span->tagName == "span" && $span->hasAttribute("id")) {
+                $span->textContent = "[Page " . $page++ . " End, " . $page . " Beginn]";
+                $span->setAttribute("class", "gray");
+                $span->setAttribute("style", "color: #999999;");
                 $textNode = $pre->childNodes->item(2);
                 $textNode->textContent = ltrim($textNode->textContent, "\n\r");
             }
+
             //fix spacing at the end of the page
             $textNode = $pre->childNodes->item($pre->childNodes->length - 1);
             $textNode->textContent = rtrim($textNode->textContent, "\n\r");
@@ -320,7 +417,7 @@ EOS;
     }
 
 
-    //remove last page numbering 
+    //remove last page numbering
     $lastNode = $pre->childNodes->item($pre->childNodes->length - 1);
     if (preg_match("~\[Page [0-9]+\]$~", $lastNode->textContent) === 1) {
         $lastNode->textContent = substr($lastNode->textContent, 0, strrpos($lastNode->textContent, "\n"));
@@ -356,8 +453,8 @@ EOS;
     for ($i = 0; $i < $headingsElements->length; $i++) {
         $a = $headingsElements->item($i);
         if ($a instanceof DOMElement && !$a->hasAttribute("class") && $a->hasAttribute("href")
-                //&& preg_match("~^[0-9]+(\.[0-9]+)*$~", $a->textContent) 
-                //&& preg_match("~^#section-[0-9]+(\.[0-9]+)*$$~", $a->getAttribute("href")) 
+                //&& preg_match("~^[0-9]+(\.[0-9]+)*$~", $a->textContent)
+                //&& preg_match("~^#section-[0-9]+(\.[0-9]+)*$$~", $a->getAttribute("href"))
                 && preg_match("~^#.*$~", $a->getAttribute("href"))
                 //&& $a->nextSibling->textContent{0} == "."
                 && strlen($a->nextSibling->textContent) <= 80 && strpos($a->nextSibling->textContent, $TOC_SPLITER) !== FALSE
@@ -496,16 +593,16 @@ EOF
 EOF
         );
     }
-    
-    
+
+
     //create nav.xhtml
 
     if ($CREATE_TOC) {
 
-        $toc = implode("", array_map(function(&$value)use($RFC_NAME){
+        $toc = implode("", array_map(function($value)use($RFC_NAME){
                     return "<li><a href=\"$RFC_NAME.xhtml" . $value[0] . "\">" . $value[2] . " - " . $value[1] . "</a></li>\n";
         }, $HEADINGS));
-        
+
         $MK_FILE("nav.xhtml", <<<EOF
 <?xml version="1.0" encoding="UTF-8" ?>
 <html xmlns="http://www.w3.org/1999/xhtml"
@@ -538,7 +635,7 @@ EOF
     //create $RFC_NAME.ncx
     $counter = new stdClass();
     $counter->i = 0;
-    $nav = implode("", array_map(function(&$value)use($counter, $RFC_NAME){
+    $nav = implode("", array_map(function($value)use($counter, $RFC_NAME){
                 $x = "<navPoint playOrder=\"$counter->i\" id=\"id_{$counter->i}\"><navLabel><text>{$value[2]} - {$value[1]}</text></navLabel><content src=\"$RFC_NAME.xhtml{$value[0]}\"/></navPoint>\n";
                 $counter->i++;
                 return $x;
@@ -587,7 +684,7 @@ EOF
     } else {
         $fonts = "";
     }
-    
+
     if ($CREATE_TOC) {
         $tocItem = '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>';
         $tocRef = '<itemref idref="nav"/>';

@@ -59,17 +59,30 @@ rfc2epub - create an epub ebook from an IETF RFC
 
 ### Install on Linux 
 
- ```bash
-git clone https://github.com/aichigm/rfc2epub
+```bash
+git clone https://github.com/aichingm/rfc2epub
 mv rfc2epub/rfc2epub.php rfc2epub/rfc2epub
 chmod +x rfc2epub/rfc2epub
 echo "PATH=$(pwd)/rfc2epub:\$PATH" >> ~/.bashrc
 
 # run it everywhere with
 rfc2epub 
- ```
+```
 
 
+## Run in Docker Image
+
+### Build image
+
+1. Clone the repository
+2. Run the build, e.g., `docker build . --tag rfc2epub`
+
+### Execute script
+
+```bash
+mkdir output
+docker run -it -v ./output:/output --rm rfc2epub 6749 /output/6749.epub
+```
 
 ### Special Thanks
 

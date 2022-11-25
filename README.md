@@ -3,42 +3,50 @@ rfc2epub - create an epub ebook from an IETF RFC
 
 ## Usage
 
- `rfc2epub [-flags [parameter]] <number of the rfc> <output book name>`
+ `rfc2epub [-flags [parameter]] <number of the rfc>`
  *Checkout the EXAMPLES (with:* `rfc2epub -e`*)*
 
 
 
 ## Flags  
 
--e    show usage examples  
--h    print this message  
--f    replace the vendors font with M+ M1 (a very narrow monospaced font by the M+ FONTS PROJECT)  
--d    do not package the book to epub but create the file and directory structure with all its contents  
--t    create a table of contents  
+-e             Show usage examples
+-h, --help     Print this message
+-o, --output   Set the output filename. The default is "RFC <number>.epub".
+-f             Replace the vendors font with M+ M1 (a very narrow monospaced font
+                by the M+ FONTS PROJECT)
+-d             Do not package the book to epub but create the file
+                and directory structure with all its contents
+-t, --toc      Create a table of contents
+-c, --cover    Create a cover
 
 
--F    M+ M1 comes in thin, light, regular and medium (see example 2)  
--L    set the letter-spacing (use positive or negative values - example 3)  
--S    set the text which splits the text and the page number in the  
-      table of contents  
+-F, --weight   Set the font weight. Requires -f.
+                Allowed values:
+                  thin, light, regular, medium
+-L, --spacing  Set the letter-spacing (use positive or negative values - example 3)
+-S, --split    Set the text which splits the text and the page number in the
+                table of contents
+-s, --size     Set the output font size, in em (default 1)
 
+--preset       Use preset combination known to work well on certain readers. If you
+                want to override specific fields of this, specify --preset first,
+                followed by any other options.
+                Allowed values:
+                  paperwhite
 
 
 ## Examples
 
-1. `rfc2epub 2549 2549.epub`
-  Creates an ebook of the rfc 2549 and names it 2549.epub 
+1. `rfc2epub -o 2549.epub 2549`
+   Creates an ebook of the rfc 2549 and names it 2549.epub
 
-2. `rfc2epub -fF light 2549 2549.epub`
-  The `f` flag replaces the vendors font with the M+ 1M font.
-  The patameter for `F` will be set to light.
+2. `rfc2epub -f --weight light -o 2549.epub 2549`
+   Use the M+ 1M font in "light" weight.
 
-3. `rfc2epub -fFL regular -1 2549 2549.epub`
-  The `f` flag replaces the vendors font with the M+ 1M font.
-  The patameter for `F` will be set to regular.
-  The parameter for `L` will be set to -1 to narrow the letters. This is
-  useful if 80 characters per line do not fit on your epub readers screen.
-
+3. `rfc2epub --preset paperwhite 2549`
+   Creates an ebook of RFC 2549 using best settings for a Kindle Paperwhite and names it
+    RFC 2549.epub
 
 
 ## Install & Run

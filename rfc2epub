@@ -5,25 +5,36 @@ function usageExit($exitCode) {
     echo <<<EOU
 rfc2epub - create an epub ebook from an ietf rfc.
 
-Usage: rfc2epub [-flags [parameter]] <number of the rfc> <output book name>
+Usage: rfc2epub [-flags [parameter]] <number of the rfc>
 
     Checkout the EXAMPLES (with: rfc2epub -e)
 
 Flags
 
-    -e    show usage examples
-    -h    print this message
-    -f    replace the vendors font with M+ M1 (a very narrow monospaced font
-              by the M+ FONTS PROJECT)
-    -d    do not package the book to epub but create the file
-              and directory structure with all its contents
-    -t    create a table of contents
+    -e             Show usage examples
+    -h, --help     Print this message
+    -o, --output   Set the output filename. The default is "RFC <number>.epub".
+    -f             Replace the vendors font with M+ M1 (a very narrow monospaced font
+                    by the M+ FONTS PROJECT)
+    -d             Do not package the book to epub but create the file
+                    and directory structure with all its contents
+    -t, --toc      Create a table of contents
+    -c, --cover    Create a cover
 
 
-    -F    M+ M1 comes in thin, light, regular and medium (see example 2)
-    -L    set the letter-spacing (use positive or negative values - example 3)
-    -S    set the text which splits the text and the page number in the
-          table of contents
+    -F, --weight   Set the font weight. Requires -f.
+                    Allowed values:
+                      thin, light, regular, medium
+    -L, --spacing  Set the letter-spacing, in pixels.
+    -S, --split    Set the text which splits the text and the page number in the
+                    table of contents
+    -s, --size     Set the output font size, in em (default 1)
+
+    --preset       Use preset combination known to work well on certain readers. If you
+                    want to override specific fields of this, specify --preset first,
+                    followed by any other options.
+                    Allowed values:
+                      paperwhite
 
 
 Special Thanks to M+ FONTS PROJECT for publishing their fonts under a
@@ -39,19 +50,15 @@ rfc2epub - create an epub ebook from an ietf rfc.
 
 Examples:
 
-    1. rfc2epub 2549 2549.epub
+    1. rfc2epub -o 2549.epub 2549
        Creates an ebook of the rfc 2549 and names it 2549.epub
 
-    2. rfc2epub -fF light 2549 2549.epub
-       The <f> flag replaces the vendors font with the M+ 1M font.
-       The patameter for <F> will be set to light.
+    2. rfc2epub -f --weight light -L -1 -o 2549.epub 2549
+       Use the M+ 1M font in "light" weight, with a letter spacing of -1px.
 
-    2. rfc2epub -fFL regular -1 2549 2549.epub
-       The <f> flag replaces the vendors font with the M+ 1M font.
-       The patameter for <F> will be set to regular.
-       The parameter for <L> will be set to -1 to narrow the letters. This is
-           useful if 80 characters per line do not fit on your epub readers
-           screen.
+    3. rfc2epub --preset paperwhite 2549
+       Creates an ebook of RFC 2549 using best settings for a Kindle Paperwhite and names it
+        RFC 2549.epub
 
 
 EOU;
@@ -72,85 +79,103 @@ EOU;
 /* Configuration */
 {
     $OUTPUT_TYPE = "ZIP"; //DIR, ZIP
-    $OUTPUT_NAME = "IETF-RFC.epub";
+    $OUTPUT_NAME = null;
     $CREATE_TOC = false;
     $CREATE_COVER = false;
     $USE_INTERNAL_FONT = true;
     $INTERNAL_FONT = "mp-1m";
     $INTERNAL_FONT_WIDTH = "regular"; //thin, light, regular, medium
     $INTERNAL_FONT_FORMATS = ["ttf", "woff", "svg", "eot"];
-    $LETTER_SPACING = 0;
+    $LETTER_SPACING = 0.;
     $TOC_SPLITER = "....";
+    $FONT_SIZE = 1.;
 
 }
 
 
-
-
 /* Commandline Parsing */
 {
-    $flagsv = [];
-    array_shift($argv);
-    while (1) {
-        $s = reset($argv);
-        if ($s[0] == "-" && (!isset($s[1]) || (isset($s[1]) && $s[1] != "-"))) {
-            $flagsv[] = array_shift($argv);
-        } else {
-            break;
+    $rest_index = null;
+    $flags = getopt("hefdtcF:L:S:s:o:",
+      ["help", "toc", "cover", "weight:", "spacing:", "split:", "size:", "preset:", "output:"],
+      $rest_index
+    );
+    $pos_args = array_slice($argv, $rest_index);
+
+    // Parse flags
+    foreach ($flags as $flag => $value) {
+        switch ($flag) {
+            case "h":
+            case "help":
+                usageExit(0);
+            case "e":
+                examples(0);
+            case "f":
+                $USE_INTERNAL_FONT = true;
+                break;
+            case "d":
+                $OUTPUT_TYPE = "DIR";
+                break;
+            case "t":
+            case "toc":
+                $CREATE_TOC = true;
+                break;
+            case "c":
+            case "cover":
+                $CREATE_COVER = true;
+                break;
+            case "F":
+            case "weight":
+                $USE_INTERNAL_FONT = true;
+                $INTERNAL_FONT_WIDTH = $value;
+                if (!in_array($INTERNAL_FONT_WIDTH, ["thin", "light", "regular", "medium"])) {
+                    usageExit(0);
+                }
+                break;
+            case "L":
+            case "spacing":
+              $LETTER_SPACING = floatval($value);
+                break;
+            case "S":
+            case "split":
+                $TOC_SPLITTER = $value;
+                break;
+            case "s":
+            case "size":
+                $FONT_SIZE = floatval($value);
+                break;
+            case "o":
+            case "output":
+                $OUTPUT_NAME = $value;
+                break;
+            case "preset":
+                if ($value == "paperwhite") {
+                    $CREATE_TOC = true;
+                    $CREATE_COVER = true;
+                    $USE_INTERNAL_FONT = true;
+                    $INTERNAL_FONT_WIDTH = "regular";
+                    $LETTER_SPACING = -1.5;
+                    $FONT_SIZE = 0.8;
+                } else {
+                    usageExit(0);
+                }
+                break;
         }
-    }
-    unset($s);
+    } 
 
-    $FLAGS = str_split(str_replace("-", "", implode("", $flagsv)));
-
-    $PARAM_VALUES = [];
-    foreach ($FLAGS as $f) {
-        if (ctype_alpha($f) && strtoupper($f) == $f) {
-            $PARAM_VALUES[$f] = array_shift($argv);
-        }
-    }
-    unset($flagsv);
-
-    if (in_array("h", $FLAGS)) {
+    // Parse positional arguments
+    if (count($pos_args) != 1) {
         usageExit(0);
     }
-    if (in_array("e", $FLAGS)) {
-        examples(0);
-    }
-
-    if (in_array("f", $FLAGS)) {
-        $USE_INTERNAL_FONT = true;
-    }
-    if (in_array("d", $FLAGS)) {
-        $OUTPUT_TYPE = "DIR";
-    }
-    if (in_array("t", $FLAGS)) {
-        $CREATE_TOC = true;
-    }
-    if (in_array("c", $FLAGS)) {
-        $CREATE_COVER = true;
-    }
-
-    if (in_array("F", $FLAGS)) {
-        $INTERNAL_FONT_WIDTH = $PARAM_VALUES["F"];
-        if (!in_array($INTERNAL_FONT_WIDTH, ["thin", "light", "regular", "medium"])) {
-            usageExit(0);
-        }
-    }
-    if (in_array("L", $FLAGS)) {
-        $LETTER_SPACING = intval($PARAM_VALUES["L"], 10);
-    }
-    if(in_array("S", $FLAGS)){
-        $TOC_SPLITER = $PARAM_VALUES["S"];
-    }
-
-    if(count($argv) != 2){
-        usageExit(0);
-    }
-    $RFC_ID = $argv[0];
+    $RFC_ID = $pos_args[0];
     $RFC_NAME = "rfc" . $RFC_ID;
-    $OUTPUT_NAME = $argv[1];
+    if ($OUTPUT_NAME == null) {
+        $OUTPUT_NAME = "RFC ${RFC_ID}.epub";
+    }
 
+    unset($rest_index);
+    unset($flags);
+    unset($pos_args);
 }
 
 
@@ -255,11 +280,11 @@ EOU;
         display: inline;
         white-space: pre;
         font-family: monospace;
-        font-size: 1em;
+        font-size: ${FONT_SIZE}em;
         font-weight: bold;
     }
     pre {
-        font-size: 1em;
+        font-size: ${FONT_SIZE}em;
         /*margin-top: 0px;
         margin-bottom: 0px; maybe add an option for that*/
     }

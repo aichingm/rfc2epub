@@ -28,6 +28,7 @@ rfc2epub - create an epub ebook from an IETF RFC
 -S, --split    Set the text which splits the text and the page number in the
                 table of contents
 -s, --size     Set the output font size, in em (default 1)
+-b, --break    Preserve page breaks from the original file
 
 --preset       Use preset combination known to work well on certain readers. If you
                 want to override specific fields of this, specify --preset first,

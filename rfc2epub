@@ -29,6 +29,7 @@ Flags
     -S, --split    Set the text which splits the text and the page number in the
                     table of contents
     -s, --size     Set the output font size, in em (default 1)
+    -b, --break    Preserve page breaks from the original text file
 
     --preset       Use preset combination known to work well on certain readers. If you
                     want to override specific fields of this, specify --preset first,
@@ -87,17 +88,19 @@ EOU;
     $INTERNAL_FONT_WIDTH = "regular"; //thin, light, regular, medium
     $INTERNAL_FONT_FORMATS = ["ttf", "woff", "svg", "eot"];
     $LETTER_SPACING = 0.;
-    $TOC_SPLITER = "....";
+    $TOC_SPLITTER = "....";
     $FONT_SIZE = 1.;
-
+    $INSERT_PAGE_BREAKS = "auto";
 }
 
 
 /* Commandline Parsing */
 {
     $rest_index = null;
-    $flags = getopt("hefdtcF:L:S:s:o:",
-      ["help", "toc", "cover", "weight:", "spacing:", "split:", "size:", "preset:", "output:"],
+    $flags = getopt("hefdtcF:L:S:s:o:b",
+      ["help", "toc", "cover", "weight:", "spacing:", "split:", "size:", "preset:", "output:",
+       "break"
+      ],
       $rest_index
     );
     $pos_args = array_slice($argv, $rest_index);
@@ -134,7 +137,11 @@ EOU;
                 break;
             case "L":
             case "spacing":
-              $LETTER_SPACING = floatval($value);
+                $LETTER_SPACING = floatval($value);
+                break;
+            case "b":
+            case "break":
+                $INSERT_PAGE_BREAKS = "always";
                 break;
             case "S":
             case "split":
@@ -152,6 +159,7 @@ EOU;
                 if ($value == "paperwhite") {
                     $CREATE_TOC = true;
                     $CREATE_COVER = true;
+                    $INSERT_PAGE_BREAKS = "always";
                     $USE_INTERNAL_FONT = true;
                     $INTERNAL_FONT_WIDTH = "regular";
                     $LETTER_SPACING = -1.5;
@@ -272,6 +280,7 @@ EOU;
     $style = $RFC_DOM->createElement("style");
     $style->setAttribute("type", "text/css");
     $style->nodeValue = <<<EOS
+
 <![CDATA[
 
     body { font-size: 10pt; margin: 0 4em; }
@@ -296,7 +305,7 @@ EOU;
         font-weight: bold;
     }
     .newpage {
-        /*page-break-before: always; maybe add an option for that*/
+        page-break-before: ${INSERT_PAGE_BREAKS};
     }
     .invisible {
         text-decoration: none;
@@ -338,11 +347,10 @@ EOU;
     ]]>
 EOS;
 
-        $HEAD->appendChild($style);
-        unset($style);
-
-
+    $HEAD->appendChild($style);
+    unset($style);
 }
+
     //insert fonts
     if ($USE_INTERNAL_FONT) {
         $style = $RFC_DOM->createElement("style");
@@ -402,7 +410,7 @@ EOS;
         }
     }
 
-    //remove page breaks
+    //remove page break markers
     $spansgray = $CONTENT->getElementsByTagName("span");
     $spansgrayRemove = [];
     for ($i = 0; $i < $spansgray->length; $i++) {
@@ -426,9 +434,14 @@ EOS;
         $pre = $pres->item($i);
         if ($pre instanceof DOMElement && (($pre->hasAttribute("class") && $pre->getAttribute("class") == "newpage") || $i == 0)) {
 
+            $page++;
             $span = $pre->childNodes->item(0);
             if ($span instanceof DOMElement && $span->tagName == "span" && $span->hasAttribute("id")) {
-                $span->textContent = "[Page " . $page++ . " End, " . $page . " Beginn]";
+                if ($INSERT_PAGE_BREAKS) {
+                  $span->textContent = "[Page " . $page . "]";
+                } else {
+                  $span->textContent = "[Page " . ($page - 1) . " End, " . $page . " Begin]";
+                }
                 $span->setAttribute("class", "gray");
                 $span->setAttribute("style", "color: #999999;");
                 $textNode = $pre->childNodes->item(2);
@@ -482,7 +495,7 @@ EOS;
                 //&& preg_match("~^#section-[0-9]+(\.[0-9]+)*$$~", $a->getAttribute("href"))
                 && preg_match("~^#.*$~", $a->getAttribute("href"))
                 //&& $a->nextSibling->textContent{0} == "."
-                && strlen($a->nextSibling->textContent) <= 80 && strpos($a->nextSibling->textContent, $TOC_SPLITER) !== FALSE
+                && strlen($a->nextSibling->textContent) <= 80 && strpos($a->nextSibling->textContent, $TOC_SPLITTER) !== FALSE
         ) {
             $HEADINGS[] = [$a->getAttribute("href"), trim($a->nextSibling->textContent, ". "), $a->textContent];
         }

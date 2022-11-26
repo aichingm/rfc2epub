@@ -10,31 +10,27 @@ rfc2epub - create an epub ebook from an IETF RFC
 
 ## Flags  
 
--e             Show usage examples
--h, --help     Print this message
--o, --output   Set the output filename. The default is "RFC <number>.epub".
--f             Replace the vendors font with M+ M1 (a very narrow monospaced font
-                by the M+ FONTS PROJECT)
--d             Do not package the book to epub but create the file
-                and directory structure with all its contents
--t, --toc      Create a table of contents
--c, --cover    Create a cover
+    -e             Show usage examples
+    -h, --help     Print this message
+    -o, --output   Set the output filename. The default is "RFC <number>.epub".
 
+    --preset       Use preset combination known to work well on certain readers. This can
+                    be combined with any other formatting flags to override these defaults.
+                    Allowed values: paperwhite
 
--F, --weight   Set the font weight. Requires -f.
-                Allowed values:
-                  thin, light, regular, medium
--L, --spacing  Set the letter-spacing (use positive or negative values - example 3)
--S, --split    Set the text which splits the text and the page number in the
-                table of contents
--s, --size     Set the output font size, in em (default 1)
--b, --break    Preserve page breaks from the original file
-
---preset       Use preset combination known to work well on certain readers. If you
-                want to override specific fields of this, specify --preset first,
-                followed by any other options.
-                Allowed values:
-                  paperwhite
+    -f             Replace the vendors font with M+ M1 (a very narrow monospaced font
+                    by the M+ FONTS PROJECT)
+    -d             Do not package the book to epub but create the file
+                    and directory structure with all its contents
+    -t, --toc      Create a table of contents
+    -c, --cover    Create a cover
+    -F, --weight   Set the font weight. Implies -f.
+                    Allowed values: thin, light, regular, medium
+    -L, --spacing  Set the letter-spacing, in pixels.
+    -S, --split    Set the text which splits the text and the page number in the
+                    table of contents
+    -s, --size     Set the output font size, in em (default 1)
+    -b, --break    Preserve page breaks from the original text file
 
 
 ## Examples

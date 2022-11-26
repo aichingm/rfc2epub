@@ -86,7 +86,7 @@ EOU;
     $LETTER_SPACING = 0.;
     $TOC_SPLITTER = "....";
     $FONT_SIZE = 1.;
-    $INSERT_PAGE_BREAKS = "auto";  // auto, always
+    $INSERT_PAGE_BREAKS = false;
 }
 
 
@@ -102,11 +102,11 @@ EOU;
     $pos_args = array_slice($argv, $rest_index);
 
     // Parse any --preset flags *before* other flags, so that other flags override this.
-    if (in_array("preset", $flags)) {
+    if (array_key_exists("preset", $flags)) {
       if ($flags["preset"] == "paperwhite") {
           $CREATE_TOC = true;
           $CREATE_COVER = true;
-          $INSERT_PAGE_BREAKS = "auto";
+          $INSERT_PAGE_BREAKS = false;
           $USE_INTERNAL_FONT = true;
           $INTERNAL_FONT_WIDTH = "regular";
           $LETTER_SPACING = -1.5;
@@ -152,7 +152,7 @@ EOU;
                 break;
             case "b":
             case "break":
-                $INSERT_PAGE_BREAKS = "always";
+                $INSERT_PAGE_BREAKS = true;
                 break;
             case "S":
             case "split":
@@ -281,6 +281,8 @@ EOU;
     unset($styles);
     unset($stylesRemove);
 
+    $pbbf = $INSERT_PAGE_BREAKS ? "always" : "inherit";
+
     $style = $RFC_DOM->createElement("style");
     $style->setAttribute("type", "text/css");
     $style->nodeValue = <<<EOS
@@ -309,7 +311,7 @@ EOU;
         font-weight: bold;
     }
     .newpage {
-        page-break-before: ${INSERT_PAGE_BREAKS};
+        page-break-before: ${pbbf};
     }
     .invisible {
         text-decoration: none;
@@ -353,6 +355,7 @@ EOS;
 
     $HEAD->appendChild($style);
     unset($style);
+    unset($pbbf);
 }
 
     //insert fonts
